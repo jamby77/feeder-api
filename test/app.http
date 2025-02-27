@@ -1,0 +1,18 @@
+@url = http://localhost:5555
+
+### GET home
+GET {{ url }}
+
+### GET info
+GET {{ url }}/info
+
+### GET config
+GET {{ url }}/config
+
+### POST config
+POST {{ url }}/config
+Content-Type: application/json
+
+{
+  "title": "test"
+}

@@ -22,4 +22,8 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect('Hello World!');
   });
+
+  it('should store config', () => {
+    return request(app.getHttpServer()).post('/config').expect(200);
+  });
 });
