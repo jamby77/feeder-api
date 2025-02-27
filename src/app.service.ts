@@ -1,4 +1,4 @@
-import { Injectable, Req } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
 import redisConfig from './config/redis';
 
@@ -11,14 +11,15 @@ export class AppService {
     this.client.on('error', (err) => console.log('Redis Client Error', err));
   }
   private async getClient() {
-    await this.client.connect();
+    if (!this.client.isReady) {
+      await this.client.connect();
+    }
     return this.client;
   }
 
   async getDbInfo() {
     const client = await this.getClient();
-    const info = await client.info();
-    return info;
+    return await client.info();
   }
 
   async getHello(): Promise<string | null> {
