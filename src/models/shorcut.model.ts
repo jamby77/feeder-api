@@ -1,4 +1,4 @@
-import { Command } from '../app.service';
+import { Command } from '../schema/app-config.schema';
 
 export class Shortcut {
   key: string;

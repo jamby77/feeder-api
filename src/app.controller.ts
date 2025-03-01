@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, UsePipes } from '@nestjs/common';
 import { AppService } from './app.service';
-import { CreateConfigDto } from './dtos/config.dto';
+import { AppConfigDto, appConfigSchema } from './schema/app-config.schema';
+import { ZodValidationPipe } from './zod.pipe';
 
 @Controller()
 export class AppController {
@@ -22,7 +23,8 @@ export class AppController {
   }
 
   @Post('/config')
-  setConfig(@Body() createConfigDto: CreateConfigDto) {
+  @UsePipes(new ZodValidationPipe(appConfigSchema))
+  setConfig(@Body() createConfigDto: AppConfigDto) {
     return this.appService.createConfig(createConfigDto);
   }
 }

@@ -14,5 +14,13 @@ POST {{ url }}/config
 Content-Type: application/json
 
 {
-  "title": "test"
+  "title": "test",
+  "refreshInterval": 600,
+  "shortcuts": [
+    {
+      "key": "j",
+      "title": "Next",
+      "command": "next"
+    }
+  ]
 }
