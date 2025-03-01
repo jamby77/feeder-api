@@ -1,0 +1,23 @@
+/** @type {import("@ianvs/prettier-plugin-sort-imports").PrettierConfig} */
+module.exports = {
+  tabWidth: 2,
+  trailingComma: 'all',
+  endOfLine: 'lf',
+  singleQuote: false,
+  semi: true,
+  arrowParens: 'avoid',
+  bracketSpacing: true,
+  printWidth: 120,
+  proseWrap: 'preserve',
+  plugins: ['@ianvs/prettier-plugin-sort-imports'],
+  pluginSearchDirs: false,
+  importOrder: ['react', '<THIRD_PARTY_MODULES>', '^/src', '^[@/*]', '^[./]'],
+  importOrderBuiltinModulesToTop: true,
+  importOrderCaseInsensitive: true,
+  importOrderParserPlugins: ['typescript', 'jsx'],
+  importOrderMergeDuplicateImports: true,
+  importOrderCombineTypeAndValueImports: true,
+  importOrderSeparation: true,
+  importOrderSortSpecifiers: true,
+  tailwindFunctions: ['clsx', 'cn', 'cva', 'tw'],
+};

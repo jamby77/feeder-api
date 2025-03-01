@@ -1,5 +1,4 @@
 export class FeedItem {
-  id: string;
   feedId: string;
   title: string;
   pubDate: Date;
