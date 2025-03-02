@@ -112,4 +112,4 @@ PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/&
 PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/
 
 ### GET refresh feed
-GET {{ url }}/refresh?feed=http://akrabat.com/feed/
+GET {{ url }}/refresh?feed=https://akrabat.com/feed/

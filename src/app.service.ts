@@ -209,6 +209,12 @@ export class AppService {
 
   async refreshFeed(url: string, user?: string) {
     const feedItems = await getFeedItems(url);
+    // update last updated for feed
+    const client = await this.getClient();
+    const key = this.getKeyFeeds(user);
+    const path = `$.${safeId(url)}.lastUpdated`;
+    await client.json.set(key, path, new Date().toISOString());
+
     if (!feedItems || !feedItems.length) {
       return;
     }
@@ -224,6 +230,7 @@ export class AppService {
     void this.storeFeedItems(feedItems);
     const existing = await this.getFeed(feedDetails.xmlUrl, user);
     if (existing) {
+      feedDetails.lastUpdated = new Date().toISOString();
       await this.updateFeed(feedDetails, user);
     } else {
       await this.addFeed(feedDetails, user);
