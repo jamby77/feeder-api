@@ -65,7 +65,7 @@ Content-Type: application/json
   "xmlUrl": "https://akrabat.com/feed/"
 }
 
-### GET feed-details
+### GET feed/details
 < {%
   const feeds = [
     "http://www.phpdeveloper.org/feed",
@@ -84,19 +84,19 @@ Content-Type: application/json
   console.log({ feedUrl });
   request.variables.set("feedUrl", feedUrl)
 %}
-GET {{ url }}/feed-details?feed={{feedUrl}}
+GET {{ url }}/feed/details?feed={{feedUrl}}
 
-### GET feed-details total count
-GET {{ url }}/feed-details/count?feed=http://akrabat.com/feed/
+### GET feed/details total count
+GET {{ url }}/feed/details/count?feed=http://akrabat.com/feed/
 
-### GET feed-details unread count
-GET {{ url }}/feed-details/count?feed=http://akrabat.com/feed/&unread=true
+### GET feed/details unread count
+GET {{ url }}/feed/details/count?feed=http://akrabat.com/feed/&unread=true
 
-### GET feed-details all feeds count
-GET {{ url }}/feed-details/count
+### GET feed/details all feeds count
+GET {{ url }}/feed/details/count
 
-### GET feed-details all feeds count unread
-GET {{ url }}/feed-details/count?unread=true
+### GET feed/details all feeds count unread
+GET {{ url }}/feed/details/count?unread=true
 
 ### GET feed items
 GET {{ url }}/feed/items?feed=http://akrabat.com/feed/

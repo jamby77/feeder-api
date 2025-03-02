@@ -147,7 +147,7 @@ export class AppController {
    * @param url - The URL of the feed to retrieve.
    * @returns The details of the specified feed.
    */
-  @Get("/feed-details")
+  @Get("/feed/details")
   async feedDetails(@Query("feed") url: string) {
     if (!url) {
       throw new BadRequestException("No url provided");
@@ -166,7 +166,7 @@ export class AppController {
    * @param unreadOnly - A boolean indicating whether to count only unread items.
    * @returns The count of feed items.
    */
-  @Get("/feed-details/count")
+  @Get("/feed/details/count")
   async feedCount(
     @Query("feed") url: string,
     @Query("unread", new DefaultValuePipe(false), new ParseBoolPipe()) unreadOnly: boolean,
