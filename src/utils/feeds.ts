@@ -277,7 +277,17 @@ type XMLFeedType = {
   rdf?: {
     channel?: { link?: string; title?: string; item?: XMLFeedItemType[] };
   };
-  feed?: { link?: string; title?: string; entry?: XMLFeedItemType[] };
+  feed?: {
+    link?:
+      | string
+      | {
+          __attributes: {
+            "@_href": string;
+          };
+        }[];
+    title?: string;
+    entry?: XMLFeedItemType[];
+  };
 };
 
 function getFeedTitle(doc: XMLFeedType): string {
@@ -285,7 +295,11 @@ function getFeedTitle(doc: XMLFeedType): string {
 }
 
 function getHtmlUrl(doc: XMLFeedType): string {
-  return doc?.rss?.channel?.link || doc?.rdf?.channel?.link || doc?.feed?.link || "";
+  const htmlUrl = doc?.rss?.channel?.link || doc?.rdf?.channel?.link || doc?.feed?.link || "";
+  if (Array.isArray(htmlUrl)) {
+    return htmlUrl[0]?.["__attributes"]?.["@_href"] ?? "";
+  }
+  return htmlUrl;
 }
 
 export async function getFeedItems(feedUrl: string) {
@@ -301,6 +315,7 @@ export async function getFeedDetails(feedUrl: string) {
 
   const doc = parseFeedXml(xml);
   const itemsNodes = (extractFeedItems(doc) || []).map(item => buildFeedItem(feedUrl, item));
+
   const feed = feedSchema.parse({
     title: getFeedTitle(doc),
     xmlUrl: feedUrl,

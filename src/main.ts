@@ -1,14 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { log } from 'console';
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpStatus,
-} from '@nestjs/common';
-import { Response } from 'express';
-import { ZodError } from 'zod';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { log } from "console";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from "@nestjs/common";
+import { Response } from "express";
+import { ZodError } from "zod";
 
 @Catch(ZodError)
 export class ZodFilter<T extends ZodError> implements ExceptionFilter {
@@ -31,4 +26,4 @@ async function bootstrap() {
   await app.listen(port);
   return port;
 }
-void bootstrap().then((port) => log(`http://localhost:${port}`));
+void bootstrap().then(port => log(`http://localhost:${port}`));

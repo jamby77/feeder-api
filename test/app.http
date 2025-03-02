@@ -53,7 +53,8 @@ Content-Type: application/json
 {
   "categories": [
     "programming",
-    "random","other"
+    "random",
+    "other"
   ],
   "htmlUrl": "https://akrabat.com",
   "id": "http://akrabat.com/feed/",
@@ -65,7 +66,19 @@ Content-Type: application/json
 }
 
 ### GET feed-details
-GET {{ url }}/feed-details?feed=http://akrabat.com/feed/
+< {%
+  const feeds = [
+    'https://www.engadget.com/rss.xml', "https://www.moreto.net/rss/lastnews.xml",
+    "https://vercel.com/atom", "http://www.phpdeveloper.org/feed","https://akrabat.com/feed/","https://blog.jetbrains.com/phpstorm/feed/",
+    "http://feeds.feedburner.com/jetbrains_intellijidea","https://blog.jetbrains.com/webstorm/feed/",
+    "https://reactjs.org/feed.xml","https://blog.jetbrains.com/go/feed/"
+  ]
+  // const feedUrl = feeds[2];
+  const feedUrl = feeds[Math.floor(Math.random() * feeds.length)];
+  console.log({ feedUrl });
+  request.variables.set("feedUrl", feedUrl)
+%}
+GET {{ url }}/feed-details?feed={{feedUrl}}
 
 ### GET feed-details total count
 GET {{ url }}/feed-details/count?feed=http://akrabat.com/feed/
@@ -86,7 +99,8 @@ GET {{ url }}/feed/items?feed=http://akrabat.com/feed/
 GET {{ url }}/feed/items?feed=http://akrabat.com/feed/&unread=true
 
 ### PUT mark feed item as read
-PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/&feedItem=https://akrabat.com/converting-a-phpunit-testlistener-to-an-event-subscriber/
+PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/&
+    feedItem=https://akrabat.com/converting-a-phpunit-testlistener-to-an-event-subscriber/
 
 ### PUT mark feed item as read BAD
 PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/

@@ -106,16 +106,25 @@ export class AppService {
   async getFeed(feedId: string, user?: string): Promise<FeedDto | null> {
     const key = this.getKeyFeeds(user);
     const client = await this.getClient();
+    const path = `$.${safeId(feedId)}`;
     const data = await client.json.get(key, {
-      path: `$.${safeId(feedId)}`,
+      path: path,
     });
-    return data ? feedSchema.parse(data) : null;
+    if (Array.isArray(data) && data.length === 0) {
+      return null;
+    }
+    return data ? feedSchema.parse(data[0]) : null;
   }
 
   async addFeed(feed: FeedDto, user?: string) {
     const key = this.getKeyFeeds(user);
     const client = await this.getClient();
-    await client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
+    const hasFeeds = await client.json.objLen(key);
+    if (!hasFeeds) {
+      await client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
+    } else {
+      await client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
+    }
   }
 
   async updateFeed(feed: FeedDto, user?: string) {
