@@ -38,7 +38,7 @@ Content-Type: application/json
     "random"
   ],
   "htmlUrl": "https://akrabat.com",
-  "id": "http://akrabat.com/feed/",
+  "id": "https://akrabat.com/feed/",
   "lastUpdated": "2024-07-02T21:24:53.000Z",
   "text": "Rob Allen!",
   "title": "Rob Allen",
@@ -57,7 +57,7 @@ Content-Type: application/json
     "other"
   ],
   "htmlUrl": "https://akrabat.com",
-  "id": "http://akrabat.com/feed/",
+  "id": "https://akrabat.com/feed/",
   "lastUpdated": "2024-07-02T21:24:53.000Z",
   "text": "Rob Allen!",
   "title": "Rob Allen",
@@ -87,10 +87,10 @@ Content-Type: application/json
 GET {{ url }}/feed/details?feed={{feedUrl}}
 
 ### GET feed/details total count
-GET {{ url }}/feed/details/count?feed=http://akrabat.com/feed/
+GET {{ url }}/feed/details/count?feed=https://akrabat.com/feed/
 
 ### GET feed/details unread count
-GET {{ url }}/feed/details/count?feed=http://akrabat.com/feed/&unread=true
+GET {{ url }}/feed/details/count?feed=https://akrabat.com/feed/&unread=true
 
 ### GET feed/details all feeds count
 GET {{ url }}/feed/details/count
@@ -99,17 +99,23 @@ GET {{ url }}/feed/details/count
 GET {{ url }}/feed/details/count?unread=true
 
 ### GET feed items
-GET {{ url }}/feed/items?feed=http://akrabat.com/feed/
+GET {{ url }}/feed/items?feed=https://akrabat.com/feed/
 
 ### GET unread feed items
-GET {{ url }}/feed/items?feed=http://akrabat.com/feed/&unread=true
+GET {{ url }}/feed/items?feed=https://akrabat.com/feed/&unread=true
 
 ### PUT mark feed item as read
-PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/&
+PUT {{ url }}/feed/items/read?feed=https://akrabat.com/feed/&
     feedItem=https://akrabat.com/converting-a-phpunit-testlistener-to-an-event-subscriber/
 
 ### PUT mark feed item as read BAD
-PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/
+PUT {{ url }}/feed/items/read?feed=https://akrabat.com/feed/
+
+### PUT mark all feed items as read
+PUT {{ url }}/feed/items/read?feed=https://akrabat.com/feed/
+
+### PUT mark all feed items as un-read
+PUT {{ url }}/feed/items/un-read?feed=https://akrabat.com/feed/
 
 ### GET refresh feed
 GET {{ url }}/refresh?feed=https://akrabat.com/feed/

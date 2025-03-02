@@ -15,7 +15,7 @@ type ContentObjectType = {
 };
 
 type XMLFeedItemType = {
-  title?: string;
+  title?: string | ContentObjectType;
   link?: string | URLObject;
   url?: string | URLObject;
   image?: string;
@@ -228,8 +228,17 @@ export function getFeedItemContent(item: XMLFeedItemType): string {
   return description as string;
 }
 
+export function getFeedItemTitle(item: XMLFeedItemType): string {
+  const title = item.title || "";
+  if (typeof title === "object" && title["#text"]) {
+    return title["#text"].trim();
+  }
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
+  return title.toString().trim();
+}
+
 function buildFeedItem(feedId: string, xmlItem: XMLFeedItemType): FeedItemDto {
-  const title = xmlItem.title || "";
+  const title = getFeedItemTitle(xmlItem);
 
   const image = getFeedImage(xmlItem);
   const description = getFeedItemContent(xmlItem);
@@ -285,13 +294,19 @@ type XMLFeedType = {
             "@_href": string;
           };
         }[];
-    title?: string;
+    title?: string | ContentObjectType;
     entry?: XMLFeedItemType[];
   };
 };
 
 function getFeedTitle(doc: XMLFeedType): string {
-  return doc?.rss?.channel?.title || doc?.rdf?.channel?.title || doc?.feed?.title || "";
+  const title = doc?.rss?.channel?.title || doc?.rdf?.channel?.title || doc?.feed?.title || "";
+  if (typeof title === "object" && title["#text"]) {
+    return title["#text"].trim();
+  } else if (typeof title === "string") {
+    return title.trim();
+  }
+  return "";
 }
 
 function getHtmlUrl(doc: XMLFeedType): string {

@@ -15,18 +15,19 @@ class ZodFilter<T extends ZodError> implements ExceptionFilter {
       errors: exception.errors,
       message: exception.message,
       statusCode: status,
+      stack: exception.stack,
     });
   }
 }
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const port = process.env.PORT ?? 3000;
   app.enableCors({
-    origin: ["http://localhost", /.*\.vercel\.app/],
+    origin: process.env.ALLOWED_ORIGINS?.split("|") || ["http://localhost:3000"],
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   });
   app.useGlobalFilters(new ZodFilter());
-  const port = process.env.PORT ?? 3000;
   await app.listen(port);
   return port;
 }

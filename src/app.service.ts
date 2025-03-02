@@ -271,6 +271,28 @@ export class AppService {
     await client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() + FEED_ITEM_EXPIRE_TIME }], { NX: true });
   }
 
+  async markAllFeedItemAsRead(feedId: string, user?: string) {
+    const client = await this.getClient();
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    const score = Date.now() + FEED_ITEM_EXPIRE_TIME;
+    const allFeedKeys = this.getKeyAllFeedItems(feedId, user);
+
+    const feedItemIds = await client.zRange(allFeedKeys, 0, -1);
+    return Promise.all(feedItemIds.map(id => client.zAdd(readFeedKeys, [{ value: id, score }], { NX: true })));
+  }
+
+  async markAllFeedItemAsUnRead(feedId: string, user?: string) {
+    const client = await this.getClient();
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    return client.zRemRangeByScore(readFeedKeys, "-inf", "+inf");
+  }
+
+  async markFeedItemAsUnRead(feedId: string, feedItemId: string, user?: string) {
+    const client = await this.getClient();
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    await client.zRem(readFeedKeys, feedItemId);
+  }
+
   async getFeedCount(feedId: string, unreadOnly?: boolean, user?: string) {
     const client = await this.getClient();
     if (unreadOnly) {

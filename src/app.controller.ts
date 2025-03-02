@@ -5,6 +5,7 @@ import {
   DefaultValuePipe,
   Delete,
   Get,
+  Logger,
   ParseBoolPipe,
   Post,
   Put,
@@ -18,6 +19,7 @@ import { FeedDto } from "./dtos/feed.dto";
 
 @Controller()
 export class AppController {
+  private readonly logger = new Logger(AppController.name);
   constructor(private readonly appService: AppService) {}
 
   /**
@@ -26,6 +28,7 @@ export class AppController {
    */
   @Get()
   getHello() {
+    this.logger.debug("getHello");
     return this.appService.getHello();
   }
 
@@ -50,6 +53,7 @@ export class AppController {
    */
   @Get("/info")
   getInfo() {
+    this.logger.debug("getInfo");
     return this.appService.getDbInfo();
   }
 
@@ -60,6 +64,7 @@ export class AppController {
    */
   @Get("/config")
   getConfig() {
+    this.logger.debug("getConfig");
     return this.appService.getConfig();
   }
 
@@ -75,6 +80,7 @@ export class AppController {
   @Post("/config")
   @UsePipes(new ZodValidationPipe(appConfigSchema))
   setConfig(@Body() createConfigDto: AppConfigDto) {
+    this.logger.debug("setConfig");
     return this.appService.createConfig(createConfigDto);
   }
 
@@ -88,6 +94,7 @@ export class AppController {
    */
   @Get("/feeds")
   getFeeds() {
+    this.logger.debug("getFeeds");
     return this.appService.getAllFeeds();
   }
 
@@ -103,6 +110,7 @@ export class AppController {
   @Post("/feeds")
   @UsePipes(new ZodValidationPipe(appConfigSchema))
   createFeed(@Body() dto: FeedDto) {
+    this.logger.debug("createFeed");
     return this.appService.addFeed(dto);
   }
 
@@ -118,6 +126,7 @@ export class AppController {
   @Put("/feeds")
   @UsePipes(new ZodValidationPipe(appConfigSchema))
   updateFeed(@Body() dto: FeedDto) {
+    this.logger.debug("updateFeed");
     return this.appService.updateFeed(dto);
   }
 
@@ -132,6 +141,7 @@ export class AppController {
   @Delete("/feeds")
   @UsePipes(new ZodValidationPipe(appConfigSchema))
   deleteFeed(@Query("feed") url: string) {
+    this.logger.debug("deleteFeed");
     if (!url) {
       throw new BadRequestException("No url provided");
     }
@@ -149,6 +159,7 @@ export class AppController {
    */
   @Get("/feed/details")
   async feedDetails(@Query("feed") url: string) {
+    this.logger.debug("feedDetails");
     if (!url) {
       throw new BadRequestException("No url provided");
     }
@@ -171,6 +182,7 @@ export class AppController {
     @Query("feed") url: string,
     @Query("unread", new DefaultValuePipe(false), new ParseBoolPipe()) unreadOnly: boolean,
   ) {
+    this.logger.debug("feedCount");
     if (!url) {
       return await this.appService.getTotalFeedCount(unreadOnly);
     }
@@ -196,6 +208,7 @@ export class AppController {
     @Query("unread", new DefaultValuePipe(false)) unreadOnly: boolean,
     @Query("limit", new DefaultValuePipe(100)) limit: number,
   ) {
+    this.logger.debug("feedItems");
     if (!url) {
       throw new BadRequestException("No url provided");
     }
@@ -214,14 +227,31 @@ export class AppController {
    */
   @Put("/feed/items/read")
   async markFeedItemAsRead(@Query("feed") url: string, @Query("feedItem") id: string) {
-    if (!url || !id) {
-      throw new BadRequestException("No url or id provided");
+    this.logger.debug("markFeedItemAsRead");
+    if (!url) {
+      throw new BadRequestException("No url provided");
+    }
+    if (!id) {
+      return await this.appService.markAllFeedItemAsRead(url);
     }
     return await this.appService.markFeedItemAsRead(url, id);
   }
 
+  @Put("/feed/items/un-read")
+  async markFeedItemAsUnRead(@Query("feed") url: string, @Query("feedItem") id: string) {
+    this.logger.debug("markFeedItemAsUnRead");
+    if (!url) {
+      throw new BadRequestException("No url provided");
+    }
+    if (!id) {
+      return await this.appService.markAllFeedItemAsUnRead(url);
+    }
+    return await this.appService.markFeedItemAsUnRead(url, id);
+  }
+
   @Get("/refresh")
   async refresh(@Query("feed") url: string) {
+    this.logger.debug("refresh");
     if (url) {
       return await this.appService.refreshFeed(url);
     }
