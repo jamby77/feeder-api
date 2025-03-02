@@ -1,6 +1,8 @@
 import { X2jOptions, XMLBuilder, XMLParser } from "fast-xml-parser";
 import { FeedItemDto, feedItemSchema } from "../dtos/feed-item.dto";
-import { FeedDto } from "../dtos/feed.dto";
+import { FeedDto, feedSchema } from "../dtos/feed.dto";
+
+export const FEED_ITEM_EXPIRE_TIME = 30 * 24 * 60 * 60; // 30 days
 
 type URLObject = {
   __attributes: {
@@ -226,13 +228,13 @@ export function getFeedItemContent(item: XMLFeedItemType): string {
   return description as string;
 }
 
-function buildFeedItem(feedId: string, item: XMLFeedItemType): FeedItemDto {
-  const title = item.title || "";
+function buildFeedItem(feedId: string, xmlItem: XMLFeedItemType): FeedItemDto {
+  const title = xmlItem.title || "";
 
-  const image = getFeedImage(item);
-  const description = getFeedItemContent(item);
-  const link = getItemUrl(item);
-  const pubDate = getFeedItemDate(item);
+  const image = getFeedImage(xmlItem);
+  const description = getFeedItemContent(xmlItem);
+  const link = getItemUrl(xmlItem);
+  const pubDate = getFeedItemDate(xmlItem);
   const data = {
     id: link,
     feedId,
@@ -250,18 +252,18 @@ function buildFeedItem(feedId: string, item: XMLFeedItemType): FeedItemDto {
     console.error({ error: JSON.stringify(error, null, 2), data });
     return {} as unknown as FeedItemDto;
   }
-  for (const field in item) {
+  for (const field in xmlItem) {
     if (!(field in feedItem)) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      feedItem[field] = item[field];
+      feedItem[field] = xmlItem[field];
     }
   }
 
-  return feedItem;
+  return feedItemSchema.parse(feedItem);
 }
+
 function extractFeedItems(doc: XMLFeedType): XMLFeedItemType[] | undefined {
   let itemsNodes: XMLFeedItemType[] | undefined = doc?.rss?.channel?.item ?? doc?.rdf?.channel?.item;
-  console.log({ itemsNodes });
   if (!itemsNodes) {
     itemsNodes = doc?.feed?.entry;
   }
@@ -293,15 +295,30 @@ export async function getFeedItems(feedUrl: string) {
   const itemsNodes = extractFeedItems(doc) || [];
   return itemsNodes.map(item => buildFeedItem(feedUrl, item));
 }
+
 export async function getFeedDetails(feedUrl: string) {
   const xml = await fetchFeedContent(feedUrl);
 
   const doc = parseFeedXml(xml);
-  const itemsNodes = extractFeedItems(doc) || [];
-  return {
+  const itemsNodes = (extractFeedItems(doc) || []).map(item => buildFeedItem(feedUrl, item));
+  const feed = feedSchema.parse({
     title: getFeedTitle(doc),
     xmlUrl: feedUrl,
     htmlUrl: getHtmlUrl(doc),
-    items: itemsNodes.map(item => buildFeedItem(feedUrl, item)),
-  };
+  });
+  return { feed, feedItems: itemsNodes };
+}
+
+/**
+ * Sanitizes a given string id by replacing all non-alphanumeric characters with underscores
+ * and removing any leading or trailing underscores.
+ *
+ * @param id the string to be sanitized
+ * @returns the sanitized string
+ */
+export function safeId(id: string) {
+  return id
+    .replace(/[^a-zA-Z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/(^_|_$)/, "");
 }

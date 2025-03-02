@@ -1,11 +1,14 @@
 import { z } from "zod";
 
 export const feedItemSchema = z.object({
+  id: z.string(),
   feedId: z.string(),
   title: z.string(),
   pubDate: z.string().datetime().optional().or(z.date().optional()),
   isRead: z.boolean().default(false),
   description: z.string().optional(),
+  content: z.string().optional(),
+  "content:encoded": z.string().optional(),
   htmlUrl: z.string().optional(),
   link: z.string().optional(),
   url: z.string().optional(),

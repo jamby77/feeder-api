@@ -5,8 +5,8 @@ import { z, ZodError } from "zod";
 import { ZodFormattedError } from "zod/lib/ZodError";
 import { AppConfigDto, appConfigSchema } from "./schema/app-config.schema";
 import { FeedDto, feedSchema } from "./dtos/feed.dto";
-import { FeedItemDto } from "./dtos/feed-item.dto";
-import { getFeedDetails } from "./utils/feeds";
+import { FeedItemDto, feedItemSchema } from "./dtos/feed-item.dto";
+import { FEED_ITEM_EXPIRE_TIME, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
 
 interface SectionData {
   [key: string]: string;
@@ -19,13 +19,24 @@ export interface InfoResult {
 const DEFAULT_USER = "default";
 
 const makeKey = (key: string[] | string, user = DEFAULT_USER) => {
-  return `${user}:${Array.isArray(key) ? key.join(":") : key}`;
+  if (typeof key === "string") {
+    return `${safeId(user)}:${safeId(key)}`;
+  } else if (Array.isArray(key)) {
+    return `${safeId(user)}:${key.map(safeId).join(":")}`;
+  }
+  return `${safeId(user)}`;
 };
 
 @Injectable()
 export class AppService {
   client: RedisClientType;
   private readonly logger = new Logger(AppService.name);
+  private readonly KEY_ALL = "all";
+  private readonly KEY_FEED_ITEMS = "feedItems";
+  private readonly KEY_READ = "read";
+  private readonly KEY_UNREAD = "unread";
+  private readonly KEY_CONFIG = "config";
+  private readonly KEY_FEEDS = "feeds";
 
   constructor() {
     const config = redisConfig();
@@ -33,17 +44,10 @@ export class AppService {
     this.client.on("error", err => this.logger.error("Redis Client Error", err));
   }
 
-  private async getClient() {
-    if (!this.client.isReady) {
-      await this.client.connect();
-    }
-    return this.client;
-  }
-
   async getConfig(user?: string): Promise<AppConfigDto | ZodFormattedError<AppConfigDto>> {
     try {
       const client = await this.getClient();
-      const configKey = makeKey("config", user);
+      const configKey = this.getKeyConfig(user);
       this.logger.debug({ configKey });
       const data = await client.json.get(configKey);
       return appConfigSchema.parse(data);
@@ -57,29 +61,30 @@ export class AppService {
 
   async setConfig(config: AppConfigDto, user?: string) {
     const client = await this.getClient();
-    const configKey = makeKey("config", user);
+    const configKey = this.getKeyConfig(user);
     // await client.hSet(configKey, config);
     await client.json.set(configKey, "$", config);
   }
 
-  private parseInfo(info: string) {
-    let section = "other";
-    return info.split("\n").reduce((res: InfoResult, line) => {
-      console.log({ line });
-      if (line.startsWith("#")) {
-        section = line.slice(2).trim();
-        res[section] = { ...(res[section] ?? {}) };
-        return res;
-      }
-      const [key, value] = line.split(":");
-      if (!key || !value) {
-        return res;
-      }
-      res[section][key] = value.trim();
-      return res;
-    }, {});
-  }
-
+  /**
+   * Retrieves information about the Redis database.
+   *
+   * The output of the Redis `INFO` command is parsed and returned as an object.
+   * The object is a mapping of section names to objects where the keys are the
+   * keys from the info output and the values are the values from the info output.
+   * The possible section names are:
+   * - `other`: The default section name.
+   * - `Server`: The version of Redis and the OS it is running on.
+   * - `Clients`: The number of connected clients.
+   * - `Memory`: The memory usage of Redis.
+   * - `Persistence`: The number of keys that are being persisted.
+   * - `Stats`: The number of commands processed, keys accessed, etc.
+   * - `Replication`: The status of replication.
+   * - `CPU`: The CPU usage of Redis.
+   * - `Cluster`: The status of the Redis Cluster.
+   * - `Keyspace`: The number of keys in each database.
+   * @returns The parsed info.
+   */
   async getDbInfo() {
     const client = await this.getClient();
     const info = await client.info();
@@ -98,61 +103,250 @@ export class AppService {
     return this.getConfig();
   }
 
-  async addFeed(feed: FeedDto) {
-    const key = makeKey(["feeds"]);
+  async getFeed(feedId: string, user?: string): Promise<FeedDto | null> {
+    const key = this.getKeyFeeds(user);
     const client = await this.getClient();
-    await client.json.set(key, "$", { [feed.xmlUrl]: feed });
+    const data = await client.json.get(key, {
+      path: `$.${safeId(feedId)}`,
+    });
+    return data ? feedSchema.parse(data) : null;
   }
 
-  async updatedFeed(feed: FeedDto) {
+  async addFeed(feed: FeedDto, user?: string) {
+    const key = this.getKeyFeeds(user);
+    const client = await this.getClient();
+    await client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
+  }
+
+  async updateFeed(feed: FeedDto, user?: string) {
     // return db.feeds.put(feed, feed.id);
-    const key = makeKey(["feeds", feed.xmlUrl]);
+    const key = this.getKeyFeeds(user);
     const client = await this.getClient();
-    await client.json.set(key, "$", feed);
+    await client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
+    return this.getFeed(feed.xmlUrl, user);
   }
 
-  async deleteFeed(feedId: string) {
+  async deleteFeed(feedId: string, user?: string) {
     // return db.feeds.delete(feedId);
-    const key = makeKey(["feeds", feedId]);
+    const key = this.getKeyFeeds(user);
     const client = await this.getClient();
-    await client.json.del(key);
+    await client.json.del(key, `$.${safeId(feedId)}`);
   }
 
-  async getFeeds() {
+  async getAllFeeds(user?: string): Promise<Record<string, FeedDto>> {
     // const feeds = await db.feeds.toArray();
     const client = await this.getClient();
-    const key = makeKey("feeds");
+    const key = this.getKeyFeeds(user);
     const data = await client.json.get(key);
 
-    const feeds = z.record(z.string(), feedSchema).parse(data);
-    console.log({ feeds });
-    // Attach resolved properties "feed items" to each feed
-    // using parallel queries:
-    await Promise.all(
-      Object.keys(feeds).map(async feedId => {
-        //     feed.items = await db.feedItems
-        //       .where('feedId')
-        //       .equals(feed.xmlUrl)
-        //       .filter((item) => !item.isRead)
-        //       .toArray();
-        // const items = await client.json.get(makeKey(["feedItems", feedId]));
-        // feeds[feedId].items = z.array(feedItemSchema).parse(items);
-      }),
-    );
-    return feeds;
+    return z.record(z.string(), feedSchema).parse(data);
   }
 
-  async addFeedItem(item: FeedItemDto) {
-    const key = makeKey(["feedItems", item.feedId]);
+  /**
+   * Store a single feed item in the database.
+   *
+   * @param item the item to store
+   * @param user
+   * @remarks
+   * This method will store the item in a JSON object with the given key,
+   * and set an expiry time of 30 days. It will also add the item to a sorted set
+   * of all items for the feed, with a score of the current time plus 30 days.
+   * This allows us to easily retrieve all items for a feed, sorted by expiration time.
+   */
+  async addFeedItem(item: FeedItemDto, user?: string) {
+    const feedItemKey = this.getKeyFeedItem(item.feedId, item.id, user);
+    const feedItemsKey = this.getKeyAllFeedItems(item.feedId, user);
     const client = await this.getClient();
-    await client.json.set(key, "$", item);
+    // store item
+    await client.json.set(feedItemKey, "$", item, { NX: true });
+    // set expire time, 30 days
+    await client.expire(feedItemKey, FEED_ITEM_EXPIRE_TIME, "LT");
+    await client.zAdd(feedItemsKey, [{ value: item.id, score: Date.now() + FEED_ITEM_EXPIRE_TIME }], { NX: true });
   }
 
-  async getFeedDetails(url: string) {
-    const feedDetails = await getFeedDetails(url);
+  /**
+   * Clear all feed items older than 30 days
+   * @param feedId
+   * @param user
+   */
+  async clearFeedItems(feedId: string, user?: string) {
+    const allFeedItemsKey = this.getKeyAllFeedItems(feedId, user);
+    const readFeedItemsKey = this.getKeyReadFeedItems(feedId, user);
+    const expiryTime = Date.now() - FEED_ITEM_EXPIRE_TIME;
+    const client = await this.getClient();
+    return Promise.all([
+      client.zRemRangeByScore(allFeedItemsKey, "-inf", expiryTime),
+      client.zRemRangeByScore(readFeedItemsKey, "-inf", expiryTime),
+    ]);
+  }
+
+  /*
+   *  - fetch feed items,
+   *  - store them in object like structure
+   *  - set expire time with LT flag - LT -- Set expiry only when the new expiry is less than current one
+   *  - expire time is 30 days
+   *  - create 2 sorted sets per feed, one for all items, another for read items
+   * zAdd <key> NX <score> <member> - NX -- Don't create if the member already exists
+   * to get read items count
+   * */
+  async storeFeedItems(items: FeedItemDto[]) {
+    return Promise.all(items.map(item => this.addFeedItem(item)));
+  }
+
+  async refreshFeeds(user?: string) {
+    const feeds = await this.getAllFeeds(user);
+    return Promise.all(Object.values(feeds).map(feed => this.refreshFeed(feed.xmlUrl, user)));
+  }
+
+  async refreshFeed(url: string, user?: string) {
+    const feedItems = await getFeedItems(url);
+    if (!feedItems || !feedItems.length) {
+      return;
+    }
+    void this.storeFeedItems(feedItems);
+    return this.clearFeedItems(url, user);
+  }
+
+  async getFeedDetails(url: string, user?: string) {
+    const { feed: feedDetails, feedItems } = await getFeedDetails(url);
     if (!feedDetails) {
       return null;
     }
+    void this.storeFeedItems(feedItems);
+    const existing = await this.getFeed(feedDetails.xmlUrl, user);
+    if (existing) {
+      await this.updateFeed(feedDetails, user);
+    } else {
+      await this.addFeed(feedDetails, user);
+    }
     return feedDetails;
+  }
+
+  async getFeedItems(feedId: string, unreadOnly: boolean, limit: number, user?: string) {
+    const allFeedKeys = this.getKeyAllFeedItems(feedId, user);
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    const client = await this.getClient();
+    let feedItemIds: string[];
+    if (unreadOnly) {
+      const unreadFeedKeys = this.getKeyUnreadFeedItems(feedId, user);
+      await client.zDiffStore(unreadFeedKeys, [allFeedKeys, readFeedKeys]);
+      feedItemIds = await client.zRange(unreadFeedKeys, "-inf", "+inf", {
+        LIMIT: { offset: 0, count: limit },
+        BY: "SCORE",
+      });
+      await client.del(unreadFeedKeys);
+    } else {
+      feedItemIds = await client.zRange(allFeedKeys, "-inf", "+inf", {
+        LIMIT: { offset: 0, count: limit },
+        BY: "SCORE",
+      });
+    }
+    const data = await Promise.all(
+      feedItemIds.map(async id => {
+        return client.json.get(this.getKeyFeedItem(feedId, id, user));
+      }),
+    );
+    return z.array(feedItemSchema).parse(data);
+  }
+
+  async markFeedItemAsRead(feedId: string, feedItemId: string, user?: string) {
+    const client = await this.getClient();
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    await client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() + FEED_ITEM_EXPIRE_TIME }], { NX: true });
+  }
+
+  async getFeedCount(feedId: string, unreadOnly?: boolean, user?: string) {
+    const client = await this.getClient();
+    if (unreadOnly) {
+      const unreadFeedKeys = await this.generateUnread(feedId, user);
+      const count = await client.zCard(unreadFeedKeys);
+      await client.del(unreadFeedKeys);
+      return count;
+    }
+    const allFeedKeys = this.getKeyAllFeedItems(feedId, user);
+    return client.zCard(allFeedKeys);
+  }
+
+  async getTotalFeedCount(unreadOnly: boolean) {
+    // get all feeds and iterate over them to get total count
+    const feeds = await this.getAllFeeds();
+    const result: Record<string, any> = {
+      total: 0,
+    };
+    for (const feed of Object.values(feeds)) {
+      result[feed.xmlUrl] = await this.getFeedCount(feed.xmlUrl, unreadOnly);
+      result.total += result[feed.xmlUrl];
+    }
+
+    return result;
+  }
+
+  private async getClient() {
+    if (!this.client.isReady && !this.client.isOpen) {
+      await this.client.connect();
+    }
+    return this.client;
+  }
+
+  /**
+   * Parses the output of the Redis `INFO` command.
+   *
+   * The output is split into lines and each line is split into key-value pairs.
+   * If a line starts with `#`, it is considered a section header and the name
+   * of the section is used as the key for the values that follow. The
+   * resulting object is a mapping of section names to objects where the keys
+   * are the keys from the info output and the values are the values from the
+   * info output.
+   * @param info The output of the `INFO` command.
+   * @returns An object with the parsed info.
+   */
+  private parseInfo(info: string) {
+    let section = "other";
+    return info.split("\n").reduce((res: InfoResult, line) => {
+      if (line.startsWith("#")) {
+        section = line.slice(2).trim();
+        res[section] = { ...(res[section] ?? {}) };
+        return res;
+      }
+      const [key, value] = line.split(":");
+      if (!key || !value) {
+        return res;
+      }
+      res[section][key] = value.trim();
+      return res;
+    }, {});
+  }
+
+  private async generateUnread(feedId: string, user?: string) {
+    const unreadFeedKeys = this.getKeyUnreadFeedItems(feedId, user);
+    const allFeedKeys = this.getKeyAllFeedItems(feedId, user);
+    const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
+    const client = await this.getClient();
+    await client.zDiffStore(unreadFeedKeys, [allFeedKeys, readFeedKeys]);
+    return unreadFeedKeys;
+  }
+
+  private getKeyUnreadFeedItems(feedId: string, user: string | undefined) {
+    return makeKey([this.KEY_FEED_ITEMS, this.KEY_UNREAD, feedId], user);
+  }
+
+  private getKeyReadFeedItems(feedId: string, user: string | undefined) {
+    return makeKey([this.KEY_FEED_ITEMS, this.KEY_READ, feedId], user);
+  }
+
+  private getKeyAllFeedItems(feedId: string, user: string | undefined) {
+    return makeKey([this.KEY_FEED_ITEMS, this.KEY_ALL, feedId], user);
+  }
+
+  private getKeyConfig(user: string | undefined) {
+    return makeKey(this.KEY_CONFIG, user);
+  }
+
+  private getKeyFeeds(user: string | undefined) {
+    return makeKey([this.KEY_FEEDS], user);
+  }
+
+  private getKeyFeedItem(feedId: string, itemId: string, user: string | undefined) {
+    return makeKey([this.KEY_FEED_ITEMS, feedId, itemId], user);
   }
 }

@@ -46,5 +46,50 @@ Content-Type: application/json
   "xmlUrl": "https://akrabat.com/feed/"
 }
 
+### PUT feed
+PUT {{ url }}/feeds
+Content-Type: application/json
+
+{
+  "categories": [
+    "programming",
+    "random","other"
+  ],
+  "htmlUrl": "https://akrabat.com",
+  "id": "http://akrabat.com/feed/",
+  "lastUpdated": "2024-07-02T21:24:53.000Z",
+  "text": "Rob Allen!",
+  "title": "Rob Allen",
+  "type": "rss",
+  "xmlUrl": "https://akrabat.com/feed/"
+}
+
 ### GET feed-details
-GET {{ url }}/feed-details?url=http://akrabat.com/feed/
+GET {{ url }}/feed-details?feed=http://akrabat.com/feed/
+
+### GET feed-details total count
+GET {{ url }}/feed-details/count?feed=http://akrabat.com/feed/
+
+### GET feed-details unread count
+GET {{ url }}/feed-details/count?feed=http://akrabat.com/feed/&unread=true
+
+### GET feed-details all feeds count
+GET {{ url }}/feed-details/count
+
+### GET feed-details all feeds count unread
+GET {{ url }}/feed-details/count?unread=true
+
+### GET feed items
+GET {{ url }}/feed/items?feed=http://akrabat.com/feed/
+
+### GET unread feed items
+GET {{ url }}/feed/items?feed=http://akrabat.com/feed/&unread=true
+
+### PUT mark feed item as read
+PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/&feedItem=https://akrabat.com/converting-a-phpunit-testlistener-to-an-event-subscriber/
+
+### PUT mark feed item as read BAD
+PUT {{ url }}/feed/items/read?feed=http://akrabat.com/feed/
+
+### GET refresh feed
+GET {{ url }}/refresh?feed=http://akrabat.com/feed/
