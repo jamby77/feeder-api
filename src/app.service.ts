@@ -184,10 +184,17 @@ export class AppService {
     const expiryTime = Date.now() - FEED_ITEM_EXPIRE_TIME;
     const client = await this.getClient();
     this.logger.debug("clearFeedItems", { expiryTime, allFeedItemsKey, readFeedItemsKey });
-    return Promise.all([
-      client.zRemRangeByScore(allFeedItemsKey, "-inf", expiryTime),
-      client.zRemRangeByScore(readFeedItemsKey, "-inf", expiryTime),
+
+    const all = await Promise.all([
+      client.zRangeByScore(allFeedItemsKey, "-inf", expiryTime),
+      client.zRangeByScore(readFeedItemsKey, "-inf", expiryTime),
     ]);
+    this.logger.debug("all for clearing", all);
+    return all;
+    // return Promise.all([
+    //   client.zRemRangeByScore(allFeedItemsKey, "-inf", expiryTime),
+    //   client.zRemRangeByScore(readFeedItemsKey, "-inf", expiryTime),
+    // ]);
   }
 
   /*
