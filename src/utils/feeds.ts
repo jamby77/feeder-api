@@ -2,7 +2,7 @@ import { X2jOptions, XMLBuilder, XMLParser } from "fast-xml-parser";
 import { FeedItemDto, feedItemSchema } from "../dtos/feed-item.dto";
 import { FeedDto, feedSchema } from "../dtos/feed.dto";
 
-export const FEED_ITEM_EXPIRE_TIME = 30 * 24 * 60 * 60; // 30 days
+export const FEED_ITEM_EXPIRE_TIME = 30 * 24 * 60 * 60; // 2592000 30 days
 
 type URLObject = {
   __attributes: {
