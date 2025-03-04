@@ -170,7 +170,7 @@ export class AppService {
     await client.json.set(feedItemKey, "$", item, { NX: true });
     // set expire time, 30 days
     await client.expire(feedItemKey, FEED_ITEM_EXPIRE_TIME, "LT");
-    await client.zAdd(feedItemsKey, [{ value: item.id, score: Date.now() + FEED_ITEM_EXPIRE_TIME }], { NX: true });
+    await client.zAdd(feedItemsKey, [{ value: item.id, score: Date.now() }], { NX: true });
   }
 
   /**
@@ -186,8 +186,8 @@ export class AppService {
     this.logger.debug("clearFeedItems", { expiryTime, allFeedItemsKey, readFeedItemsKey });
 
     const all = await Promise.all([
-      client.zRangeByScore(allFeedItemsKey, "-inf", expiryTime),
-      client.zRangeByScore(readFeedItemsKey, "-inf", expiryTime),
+      client.zRangeByScore(allFeedItemsKey, 0, expiryTime),
+      client.zRangeByScore(readFeedItemsKey, 0, expiryTime),
     ]);
     this.logger.debug("all for clearing", all);
     return all;
@@ -282,13 +282,13 @@ export class AppService {
       return;
     }
     await client.json.set(itemKey, "$.isRead", true);
-    await client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() + FEED_ITEM_EXPIRE_TIME }], { NX: true });
+    await client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() }], { NX: true });
   }
 
   async markAllFeedItemAsRead(feedId: string, user?: string) {
     const client = await this.getClient();
     const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
-    const score = Date.now() + FEED_ITEM_EXPIRE_TIME;
+    const score = Date.now();
     const allFeedKeys = this.getKeyAllFeedItems(feedId, user);
     const feedItemIds = await client.zRange(allFeedKeys, 0, -1);
     return Promise.all(
