@@ -3,7 +3,7 @@ import { AppModule } from "./app.module";
 import { ArgumentsHost, Catch, ConsoleLogger, ExceptionFilter, HttpStatus } from "@nestjs/common";
 import { Response } from "express";
 import { ZodError } from "zod";
-import * as process from "node:process";
+import { env, IS_DEVELOPMENT, IS_PRODUCTION } from "./utils/env";
 
 @Catch(ZodError)
 class ZodFilter<T extends ZodError> implements ExceptionFilter {
@@ -22,16 +22,17 @@ class ZodFilter<T extends ZodError> implements ExceptionFilter {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
+    snapshot: IS_DEVELOPMENT,
     logger: new ConsoleLogger({
       prefix: "Feeder-Api",
       timestamp: true,
       breakLength: 200,
-      colors: process.env.NODE_ENV === "development",
-      json: true, //process.env.NODE_ENV !== "development",
+      colors: IS_DEVELOPMENT,
+      json: IS_PRODUCTION, //process.env.NODE_ENV !== "development",
     }),
   });
-  const port = parseInt(process.env.PORT || "3000", 10);
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split("|") || ["http://localhost:3000"];
+  const port = env.PORT;
+  const allowedOrigins = env.ALLOWED_ORIGINS.split("|");
   app.enableCors({
     origin: function (origin: string, callback: (...args: unknown[]) => void) {
       // console.log({ origin, allowedOrigins });
@@ -50,8 +51,9 @@ async function bootstrap() {
   await app.listen(port);
   return port;
 }
+
 void bootstrap().then(port => {
-  if (process.env.NODE_ENV === "production") {
+  if (IS_PRODUCTION) {
     return;
   }
   console.log(`http://localhost:${port}`);
