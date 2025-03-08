@@ -1,9 +1,10 @@
+;
 // @ts-check
-import eslintConfigPrettier from "eslint-config-prettier";
-import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
-import globals from "globals";
-import tseslint from "typescript-eslint";
-import eslint from "@eslint/js";
+import eslintConfigPrettier from 'eslint-config-prettier';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import eslint from '@eslint/js';
+
 
 export default tseslint.config(
   {
