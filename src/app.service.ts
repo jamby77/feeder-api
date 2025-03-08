@@ -1,12 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { z, ZodError } from "zod";
-import { ZodFormattedError } from "zod/lib/ZodError";
-import { AppConfigDto, appConfigSchema } from "./schema/app-config.schema";
+import { z } from "zod";
 import { FeedDto, feedSchema } from "./dtos/feed.dto";
 import { FeedItemDto, feedItemSchema } from "./dtos/feed-item.dto";
 import { FEED_ITEM_EXPIRE_TIME, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
 import { RedisClient } from "./redis-client/redis-client";
-import { DEFAULT_USER } from "./utils/env";
+import { makeKey } from "./utils/keys";
 
 interface SectionData {
   [key: string]: string;
@@ -16,15 +14,6 @@ export interface InfoResult {
   [section: string]: SectionData;
 }
 
-const makeKey = (key: string[] | string, user = DEFAULT_USER) => {
-  if (typeof key === "string") {
-    return `${safeId(user)}:${safeId(key)}`;
-  } else if (Array.isArray(key)) {
-    return `${safeId(user)}:${key.map(safeId).join(":")}`;
-  }
-  return `${safeId(user)}`;
-};
-
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
@@ -32,32 +21,9 @@ export class AppService {
   private readonly KEY_FEED_ITEMS = "feedItems";
   private readonly KEY_READ = "read";
   private readonly KEY_UNREAD = "unread";
-  private readonly KEY_CONFIG = "config";
   private readonly KEY_FEEDS = "feeds";
 
   constructor(private readonly client: RedisClient) {}
-
-  async getConfig(user?: string): Promise<AppConfigDto | ZodFormattedError<AppConfigDto>> {
-    try {
-      const client = await this.client.getClient();
-      const configKey = this.getKeyConfig(user);
-      this.logger.debug({ configKey });
-      const data = await client.json.get(configKey);
-      return appConfigSchema.parse(data);
-    } catch (e) {
-      if (e instanceof ZodError) {
-        return e.format();
-      }
-      throw e;
-    }
-  }
-
-  async setConfig(config: AppConfigDto, user?: string) {
-    const client = await this.client.getClient();
-    const configKey = this.getKeyConfig(user);
-    // await client.hSet(configKey, config);
-    await client.json.set(configKey, "$", config);
-  }
 
   /**
    * Retrieves information about the Redis database.
@@ -90,12 +56,6 @@ export class AppService {
     return client.GET("hello");
   }
 
-  async createConfig(createConfigDto: AppConfigDto) {
-    await this.setConfig(appConfigSchema.parse(createConfigDto));
-
-    return this.getConfig();
-  }
-
   async getFeed(feedId: string, user?: string): Promise<FeedDto | null> {
     const key = this.getKeyFeeds(user);
     const client = await this.client.getClient();
@@ -114,9 +74,9 @@ export class AppService {
     const client = await this.client.getClient();
     const hasFeeds = await client.json.objLen(key);
     if (!hasFeeds) {
-      await client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
+      return client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
     } else {
-      await client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
+      return client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
     }
   }
 
@@ -132,7 +92,7 @@ export class AppService {
     // return db.feeds.delete(feedId);
     const key = this.getKeyFeeds(user);
     const client = await this.client.getClient();
-    await client.json.del(key, `$.${safeId(feedId)}`);
+    return client.json.del(key, `$.${safeId(feedId)}`);
   }
 
   async getAllFeeds(user?: string): Promise<Record<string, FeedDto>> {
@@ -275,7 +235,7 @@ export class AppService {
       return;
     }
     await client.json.set(itemKey, "$.isRead", true);
-    await client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() }], { NX: true });
+    return client.zAdd(readFeedKeys, [{ value: feedItemId, score: Date.now() }], { NX: true });
   }
 
   async markAllFeedItemAsRead(feedId: string, user?: string) {
@@ -312,7 +272,7 @@ export class AppService {
   async markFeedItemAsUnRead(feedId: string, feedItemId: string, user?: string) {
     const client = await this.client.getClient();
     const readFeedKeys = this.getKeyReadFeedItems(feedId, user);
-    await client.zRem(readFeedKeys, feedItemId);
+    return client.zRem(readFeedKeys, feedItemId);
   }
 
   async getFeedCount(feedId: string, unreadOnly?: boolean, user?: string) {
@@ -389,10 +349,6 @@ export class AppService {
 
   private getKeyAllFeedItems(feedId: string, user: string | undefined) {
     return makeKey([this.KEY_FEED_ITEMS, this.KEY_ALL, feedId], user);
-  }
-
-  private getKeyConfig(user: string | undefined) {
-    return makeKey(this.KEY_CONFIG, user);
   }
 
   private getKeyFeeds(user: string | undefined) {
