@@ -1,8 +1,11 @@
+import { env } from "../utils/env";
+
 export default () => ({
-  username: process.env.REDIS_USER || '',
-  password: process.env.REDIS_PASSWORD || '',
+  username: env.REDIS_USER || "",
+  password: env.REDIS_PASSWORD || "",
+  name: "feeder-api-client",
   socket: {
-    host: process.env.REDIS_HOST || '',
-    port: parseInt(process.env.REDIS_PORT || '0', 10),
+    host: env.REDIS_HOST || "",
+    port: env.REDIS_PORT,
   },
 });

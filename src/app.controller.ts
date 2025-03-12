@@ -13,7 +13,7 @@ import {
   UsePipes,
 } from "@nestjs/common";
 import { AppService } from "./app.service";
-import { AppConfigDto, appConfigSchema } from "./schema/app-config.schema";
+import { appConfigSchema } from "./schema/app-config.schema";
 import { ZodValidationPipe } from "./zod.pipe";
 import { FeedDto } from "./dtos/feed.dto";
 
@@ -55,33 +55,6 @@ export class AppController {
   getInfo() {
     this.logger.debug("getInfo");
     return this.appService.getDbInfo();
-  }
-
-  /**
-   * Retrieves the current app configuration.
-   *
-   * @returns The current app configuration as a JSON object.
-   */
-  @Get("/config")
-  getConfig() {
-    this.logger.debug("getConfig");
-    return this.appService.getConfig();
-  }
-
-  /**
-   * Sets the application configuration.
-   *
-   * This endpoint accepts a configuration object and updates the application
-   * settings accordingly. The configuration is validated using a Zod schema.
-   *
-   * @param createConfigDto - The configuration data transfer object containing the new settings.
-   * @returns The updated configuration.
-   */
-  @Post("/config")
-  @UsePipes(new ZodValidationPipe(appConfigSchema))
-  setConfig(@Body() createConfigDto: AppConfigDto) {
-    this.logger.debug("setConfig", { createConfigDto });
-    return this.appService.createConfig(createConfigDto);
   }
 
   /**
@@ -235,7 +208,9 @@ export class AppController {
     if (!id) {
       return await this.appService.markAllFeedItemAsRead(url);
     }
-    return await this.appService.markFeedItemAsRead(url, id);
+    const result = await this.appService.markFeedItemAsRead(url, id);
+    this.logger.debug("markFeedItemAsRead result", { result });
+    return result;
   }
 
   @Put("/feed/items/un-read")
