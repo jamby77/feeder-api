@@ -9,7 +9,7 @@ export class RedisClient {
   constructor() {
     const config = redisConfig();
     this.client = createClient(config);
-    this.client.on("error", err => this.logger.error("Redis Client Error", err));
+    this.client.on("error", err => this.logger.error("Redis Client Error", err, config));
   }
 
   async getClient() {
