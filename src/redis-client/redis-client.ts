@@ -9,12 +9,13 @@ export class RedisClient {
   constructor() {
     const config = redisConfig();
     this.client = createClient(config);
-    this.client.on("error", err =>
-      this.logger.error("Redis Client Error", {
-        err,
-        config,
-      }),
-    );
+    this.client.on("error", (err: any): void => {
+      this.logger.error("Redis Client Error", err);
+      this.client.disconnect().catch(disconnectErr => {
+        this.logger.error("Error during disconnect", disconnectErr);
+        this.client = createClient(config);
+      });
+    });
   }
 
   async getClient() {
@@ -22,5 +23,9 @@ export class RedisClient {
       await this.client.connect();
     }
     return this.client;
+  }
+
+  disconnect() {
+    return this.client.disconnect();
   }
 }

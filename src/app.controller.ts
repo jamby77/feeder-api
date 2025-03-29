@@ -155,11 +155,18 @@ export class AppController {
     @Query("feed") url: string,
     @Query("unread", new DefaultValuePipe(false), new ParseBoolPipe()) unreadOnly: boolean,
   ) {
-    this.logger.debug("feedCount", { url, unreadOnly });
-    if (!url) {
-      return await this.appService.getTotalFeedCount(unreadOnly);
+    this.logger.debug("feedCount", {
+      url,
+      unreadOnly,
+    });
+    let result: number | Record<string, any>;
+    if (url) {
+      result = await this.appService.getFeedCount(url, unreadOnly);
+    } else {
+      result = await this.appService.getTotalFeedCount(unreadOnly);
     }
-    return await this.appService.getFeedCount(url, unreadOnly);
+
+    return result;
   }
 
   /**
@@ -181,7 +188,11 @@ export class AppController {
     @Query("unread", new DefaultValuePipe(false)) unreadOnly: boolean,
     @Query("limit", new DefaultValuePipe(100)) limit: number,
   ) {
-    this.logger.debug("feedItems", { url, unreadOnly, limit });
+    this.logger.debug("feedItems", {
+      url,
+      unreadOnly,
+      limit,
+    });
     if (!url) {
       throw new BadRequestException("No url provided");
     }
@@ -201,36 +212,52 @@ export class AppController {
    */
   @Put("/feed/items/read")
   async markFeedItemAsRead(@Query("feed") url: string, @Query("feedItem") id: string) {
-    this.logger.debug("markFeedItemAsRead", { url, id });
+    this.logger.debug("markFeedItemAsRead", {
+      url,
+      id,
+    });
     if (!url) {
       throw new BadRequestException("No url provided");
     }
-    if (!id) {
-      return await this.appService.markAllFeedItemAsRead(url);
+    let result: number | (number | "OK" | null)[] | undefined;
+    if (id) {
+      result = await this.appService.markFeedItemAsRead(url, id);
+      this.logger.debug("markFeedItemAsRead result", { result });
+    } else {
+      result = await this.appService.markAllFeedItemAsRead(url);
     }
-    const result = await this.appService.markFeedItemAsRead(url, id);
-    this.logger.debug("markFeedItemAsRead result", { result });
+
     return result;
   }
 
   @Put("/feed/items/un-read")
   async markFeedItemAsUnRead(@Query("feed") url: string, @Query("feedItem") id: string) {
-    this.logger.debug("markFeedItemAsUnRead", { url, id });
+    this.logger.debug("markFeedItemAsUnRead", {
+      url,
+      id,
+    });
     if (!url) {
       throw new BadRequestException("No url provided");
     }
+    let result: number;
     if (!id) {
-      return await this.appService.markAllFeedItemAsUnRead(url);
+      result = await this.appService.markAllFeedItemAsUnRead(url);
+    } else {
+      result = await this.appService.markFeedItemAsUnRead(url, id);
     }
-    return await this.appService.markFeedItemAsUnRead(url, id);
+
+    return result;
   }
 
   @Get("/refresh")
   async refresh(@Query("feed") url: string) {
     this.logger.debug("refresh", { url });
-    if (url) {
-      return await this.appService.refreshFeed(url);
+    let result: [number, number] | (never[] | [number, number])[];
+    if (!url) {
+      result = await this.appService.refreshFeeds();
+    } else {
+      result = await this.appService.refreshFeed(url);
     }
-    return await this.appService.refreshFeeds();
+    return result;
   }
 }

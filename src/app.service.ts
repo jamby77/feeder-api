@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { FeedDto, feedSchema } from "./dtos/feed.dto";
 import { FeedItemDto, feedItemSchema } from "./dtos/feed-item.dto";
-import { FEED_ITEM_EXPIRE_TIME, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
+import { FEED_ITEM_EXPIRE_TIME_IN_MS, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
 import { RedisClient } from "./redis-client/redis-client";
 import { makeKey } from "./utils/keys";
 
@@ -53,7 +53,7 @@ export class AppService {
   async getHello(): Promise<string | null> {
     const client = await this.client.getClient();
     await client.SET("hello", "world");
-    return client.GET("hello");
+    return await client.GET("hello");
   }
 
   async getFeed(feedId: string, user?: string): Promise<FeedDto | null> {
@@ -63,6 +63,7 @@ export class AppService {
     const data = await client.json.get(key, {
       path: path,
     });
+
     if (Array.isArray(data) && data.length === 0) {
       return null;
     }
@@ -74,10 +75,11 @@ export class AppService {
     const client = await this.client.getClient();
     const hasFeeds = await client.json.objLen(key);
     if (!hasFeeds) {
-      return client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
+      await client.json.set(key, "$", { [safeId(feed.xmlUrl)]: feed });
     } else {
-      return client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
+      await client.json.set(key, `$.${safeId(feed.xmlUrl)}`, feed);
     }
+    return feed;
   }
 
   async updateFeed(feed: FeedDto, user?: string) {
@@ -92,7 +94,7 @@ export class AppService {
     // return db.feeds.delete(feedId);
     const key = this.getKeyFeeds(user);
     const client = await this.client.getClient();
-    return client.json.del(key, `$.${safeId(feedId)}`);
+    return await client.json.del(key, `$.${safeId(feedId)}`);
   }
 
   async getAllFeeds(user?: string): Promise<Record<string, FeedDto>> {
@@ -122,7 +124,7 @@ export class AppService {
     // store item
     await client.json.set(feedItemKey, "$", item, { NX: true });
     // set expire time, 30 days
-    await client.expire(feedItemKey, FEED_ITEM_EXPIRE_TIME, "LT");
+    await client.expire(feedItemKey, FEED_ITEM_EXPIRE_TIME_IN_MS / 1000, "LT");
     await client.zAdd(feedItemsKey, [{ value: item.id, score: Date.now() }], { NX: true });
   }
 
@@ -134,7 +136,7 @@ export class AppService {
   async clearFeedItems(feedId: string, user?: string) {
     const allFeedItemsKey = this.getKeyAllFeedItems(feedId, user);
     const readFeedItemsKey = this.getKeyReadFeedItems(feedId, user);
-    const expiryTime = Date.now() - FEED_ITEM_EXPIRE_TIME;
+    const expiryTime = Date.now() - FEED_ITEM_EXPIRE_TIME_IN_MS;
     const client = await this.client.getClient();
     this.logger.debug("clearFeedItems", { expiryTime, allFeedItemsKey, readFeedItemsKey });
 
@@ -143,11 +145,11 @@ export class AppService {
       client.zRangeByScore(readFeedItemsKey, 0, expiryTime),
     ]);
     this.logger.debug("all for clearing", all);
-    return all;
-    // return Promise.all([
-    //   client.zRemRangeByScore(allFeedItemsKey, "-inf", expiryTime),
-    //   client.zRemRangeByScore(readFeedItemsKey, "-inf", expiryTime),
-    // ]);
+    // return all;
+    return Promise.all([
+      client.zRemRangeByScore(allFeedItemsKey, 0, expiryTime),
+      client.zRemRangeByScore(readFeedItemsKey, 0, expiryTime),
+    ]);
   }
 
   /*
@@ -177,7 +179,7 @@ export class AppService {
     await client.json.set(key, path, new Date().toISOString());
 
     if (!feedItems || !feedItems.length) {
-      return;
+      return [];
     }
     void this.storeFeedItems(feedItems);
     return this.clearFeedItems(url, user);
@@ -299,6 +301,10 @@ export class AppService {
     }
 
     return result;
+  }
+
+  async disconnect() {
+    return this.client.disconnect();
   }
 
   /**

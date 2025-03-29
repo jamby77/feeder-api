@@ -2,7 +2,7 @@ import { X2jOptions, XMLBuilder, XMLParser } from "fast-xml-parser";
 import { FeedItemDto, feedItemSchema } from "../dtos/feed-item.dto";
 import { FeedDto, feedSchema } from "../dtos/feed.dto";
 
-export const FEED_ITEM_EXPIRE_TIME = 30 * 24 * 60 * 60 * 1000; // 2592000000 30 days
+export const FEED_ITEM_EXPIRE_TIME_IN_MS = 30 * 24 * 60 * 60 * 1000; // 2592000000 30 days
 
 type URLObject = {
   __attributes: {
@@ -263,7 +263,6 @@ function buildFeedItem(feedId: string, xmlItem: XMLFeedItemType): FeedItemDto {
   }
   for (const field in xmlItem) {
     if (!(field in feedItem)) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       feedItem[field] = xmlItem[field];
     }
   }
