@@ -6,16 +6,18 @@ import redisConfig from "../config/redis";
 export class RedisClient {
   client: RedisClientType;
   private readonly logger = new Logger(RedisClient.name);
+  private readonly config = redisConfig();
   constructor() {
-    const config = redisConfig();
-    this.client = createClient(config);
-    this.client.on("error", (err: any): void => {
-      this.logger.error("Redis Client Error", err);
-      this.client.disconnect().catch(disconnectErr => {
-        this.logger.error("Error during disconnect", disconnectErr);
-        this.client = createClient(config);
-      });
-    });
+    this.#connect();
+  }
+  #connect() {
+    this.client = createClient(this.config);
+    this.client.on("error", this.handleError.bind(this));
+  }
+
+  handleError(err: any) {
+    this.logger.error("Redis Client Error", err);
+    this.#connect();
   }
 
   async getClient() {
