@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { FeedDto, feedSchema } from "./dtos/feed.dto";
 import { FeedItemDto, feedItemSchema } from "./dtos/feed-item.dto";
-import { FEED_ITEM_EXPIRE_TIME_IN_MS, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
+import { FEED_ITEM_EXPIRE_TIME_IN_MS, fetchArticle, getFeedDetails, getFeedItems, safeId } from "./utils/feeds";
 import { RedisClient } from "./redis-client/redis-client";
 import { makeKey } from "./utils/keys";
 
@@ -123,6 +123,15 @@ export class AppService {
     const client = await this.client.getClient();
     // store item
     await client.json.set(feedItemKey, "$", item, { NX: true });
+    let article: string | null;
+    [article] = (await client.json.get(feedItemKey, { path: "$.article" })) as string[];
+
+    if ((!article || article?.length === 0) && item.link) {
+      this.logger.debug("Fetching and storing article content");
+      article = await fetchArticle(item.link);
+      this.logger.debug({ article });
+      await client.json.set(feedItemKey, "$.article", article);
+    }
     // set expire time, 30 days
     await client.expire(feedItemKey, FEED_ITEM_EXPIRE_TIME_IN_MS / 1000, "LT");
     await client.zAdd(feedItemsKey, [{ value: item.id, score: Date.now() }], { NX: true });
@@ -190,7 +199,9 @@ export class AppService {
     if (!feedDetails) {
       return null;
     }
-    void this.storeFeedItems(feedItems);
+    if (feedItems) {
+      void this.storeFeedItems(feedItems);
+    }
     const existing = await this.getFeed(feedDetails.xmlUrl, user);
     if (existing) {
       feedDetails.lastUpdated = new Date().toISOString();

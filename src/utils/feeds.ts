@@ -1,6 +1,8 @@
-import { X2jOptions, XMLBuilder, XMLParser } from "fast-xml-parser";
-import { FeedItemDto, feedItemSchema } from "../dtos/feed-item.dto";
-import { FeedDto, feedSchema } from "../dtos/feed.dto";
+import * as createDOMPurify from "dompurify";
+import { parseHTML } from "linkedom";
+import { extract, type FeedData, type FeedEntry } from "@extractus/feed-extractor";
+import { Readability } from "@mozilla/readability";
+import { feedSchema } from "../dtos/feed.dto";
 
 export const FEED_ITEM_EXPIRE_TIME_IN_MS = 30 * 24 * 60 * 60 * 1000; // 2592000000 30 days
 
@@ -41,6 +43,43 @@ type XMLFeedItemType = {
   }[];
 };
 
+export async function fetchArticle(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch article: ${response.status}`);
+  }
+  const html = await response.text();
+  const { document, window } = parseHTML(html);
+  [...document.getElementsByTagName("img")].forEach(link => {
+    link.src = new URL(link.src, url).href;
+  });
+  [...document.getElementsByTagName("a")].forEach(link => {
+    link.href = new URL(link.href, url).href;
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener nofollow");
+  });
+  let reader: Readability | null = null;
+
+  try {
+    reader = new Readability(document);
+  } catch (error) {
+    console.error("Readability error", (error as Error).message, url);
+  }
+
+  let result: string | null = null;
+  if (reader) {
+    const article = reader?.parse();
+
+    if (article?.content) {
+      // const { window } = parseHTML("");
+      const purify = createDOMPurify(window);
+
+      result = purify.sanitize(article.content);
+    }
+  }
+  return result;
+}
+
 export function getItemUrl(item: XMLFeedItemType) {
   const link = item.link || "";
   const url = item.url || "";
@@ -79,263 +118,60 @@ export function getFeedImage(item: XMLFeedItemType) {
   return image;
 }
 
+export interface FeederFeedData extends FeedData {
+  entries?: Array<
+    FeedEntry & {
+      id: string;
+      feedId: string;
+      image: string;
+      isRead: boolean;
+    }
+  >;
+}
+
 async function fetchFeedContent(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch feed: ${response.status}`);
-  }
-  return response.text();
-}
-
-function parseFeedXml(xml: string): XMLFeedType {
-  const parserOptions: X2jOptions = {
-    ignoreAttributes: false,
-    stopNodes: ["feed.entry.content"],
-    allowBooleanAttributes: true,
-    attributesGroupName: "__attributes",
-    parseAttributeValue: true,
-    parseTagValue: true,
-    ignoreDeclaration: true,
-  };
-  const parser = new XMLParser(parserOptions);
-  return parser.parse(xml) as XMLFeedType;
-}
-
-export function buildFeedsExportData(feeds: FeedDto[]) {
-  const outline: Record<string, any> = {};
-
-  for (const { htmlUrl, title, xmlUrl, categories } of feeds) {
-    const outlineItem = {
-      type: "rss",
-      text: title,
-      title,
-      xmlUrl,
-      htmlUrl,
-    };
-    if (categories && categories.length > 0) {
-      for (const c of categories) {
-        if (!outline[c]) {
-          outline[c] = {
-            type: "category",
-            title: c,
-            text: c,
-            outline: [],
-          };
-        }
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-        outline[c].outline.push(outlineItem);
-      }
-    } else {
-      outline[title] = outlineItem;
-    }
-  }
-
-  return {
-    head: {
-      title: "Feeder - Export",
-    },
-    body: {
-      outline: Object.values(outline),
-    },
-  };
-}
-
-export function buildFeedsOPMLXml(feeds: FeedDto[]): any {
-  const options = {
-    ignoreAttributes: false,
-    allowBooleanAttributes: true,
-    suppressBooleanAttributes: true,
-    attributesGroupName: "__attributes",
-    format: true,
-    arrayNodeName: "outline",
-    suppressUnpairedNodes: false,
-  };
-  const builder = new XMLBuilder(options);
-  const outline: Record<string, any> = {};
-
-  for (const { htmlUrl, title, xmlUrl, categories } of feeds) {
-    const outlineItem = {
-      __attributes: {
-        type: "rss",
-        text: title,
-        title,
-        xmlUrl,
-        htmlUrl,
-      },
-    };
-    if (categories && categories.length > 0) {
-      for (const c of categories) {
-        if (!outline[c]) {
-          outline[c] = {
-            __attributes: {
-              title: c,
-              text: c,
-            },
-            outline: [],
-          };
-        }
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-        outline[c].outline.push(outlineItem);
-      }
-    } else {
-      outline[title] = outlineItem;
-    }
-  }
-
-  const data = {
-    "?xml": {
-      __attributes: {
-        version: "1.0",
-        encoding: "UTF-8",
+  const rawFeedData = await extract(
+    url,
+    {
+      descriptionMaxLen: 0,
+      getExtraFeedFields: _feedData => ({}),
+      getExtraEntryFields: _entryData => {
+        console.log({ _entryData });
+        // return {};
+        const image = getFeedImage(_entryData as unknown as XMLFeedItemType);
+        //
+        return {
+          id: getItemUrl(_entryData as unknown as XMLFeedItemType),
+          feedId: url,
+          image,
+          isRead: false,
+        };
       },
     },
-    opml: {
-      __attributes: {
-        version: "1.1",
-      },
-      head: {
-        title: "Feeder - Export",
-      },
-      body: {
-        outline: Object.values(outline),
-      },
+    {
+      signal: AbortSignal.timeout(3000),
     },
-  };
-  return builder.build(data);
-}
+  );
 
-function getFeedItemDate(item: XMLFeedItemType) {
-  if (!item) {
-    return new Date();
-  }
-  let pubDateStr: string = item.pubDate ?? "";
-  if (!pubDateStr && item.updated) {
-    // atom (vercel)
-    pubDateStr = item.updated;
-  }
-  return pubDateStr.trim().length > 0 ? new Date(pubDateStr) : new Date();
-}
-
-export function getFeedItemContent(item: XMLFeedItemType): string {
-  let description = item.description || "";
-  if (description && typeof description === "object" && description["#text"]) {
-    description = description["#text"].trim();
-  } else if (item.content && typeof item.content === "object" && item.content["#text"]) {
-    description = item.content["#text"].trim();
-  } else if (item.summary && typeof item.summary === "object" && item.summary["#text"]) {
-    description = item.summary["#text"].trim();
-  }
-  return description as string;
-}
-
-export function getFeedItemTitle(item: XMLFeedItemType): string {
-  const title = item.title || "";
-  if (typeof title === "object" && title["#text"]) {
-    return title["#text"].trim();
-  }
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  return title.toString().trim();
-}
-
-function buildFeedItem(feedId: string, xmlItem: XMLFeedItemType): FeedItemDto {
-  const title = getFeedItemTitle(xmlItem);
-
-  const image = getFeedImage(xmlItem);
-  const description = getFeedItemContent(xmlItem);
-  const link = getItemUrl(xmlItem);
-  const pubDate = getFeedItemDate(xmlItem);
-  const data = {
-    id: link,
-    feedId,
-    title,
-    description,
-    pubDate,
-    link,
-    image,
-    isRead: false,
-  };
-
-  const { error, data: feedItem } = feedItemSchema.safeParse(data);
-
-  if (error || !feedItem) {
-    console.error({ error: JSON.stringify(error, null, 2), data });
-    return {} as unknown as FeedItemDto;
-  }
-  for (const field in xmlItem) {
-    if (!(field in feedItem)) {
-      feedItem[field] = xmlItem[field];
-    }
-  }
-
-  return feedItemSchema.parse(feedItem);
-}
-
-function extractFeedItems(doc: XMLFeedType): XMLFeedItemType[] | undefined {
-  let itemsNodes: XMLFeedItemType[] | undefined = doc?.rss?.channel?.item ?? doc?.rdf?.channel?.item;
-  if (!itemsNodes) {
-    itemsNodes = doc?.feed?.entry;
-  }
-  return itemsNodes;
-}
-
-type XMLFeedType = {
-  rss?: {
-    channel?: { link?: string; title?: string; item?: XMLFeedItemType[] };
-  };
-  rdf?: {
-    channel?: { link?: string; title?: string; item?: XMLFeedItemType[] };
-  };
-  feed?: {
-    link?:
-      | string
-      | {
-          __attributes: {
-            "@_href": string;
-          };
-        }[];
-    title?: string | ContentObjectType;
-    entry?: XMLFeedItemType[];
-  };
-};
-
-function getFeedTitle(doc: XMLFeedType): string {
-  const title = doc?.rss?.channel?.title || doc?.rdf?.channel?.title || doc?.feed?.title || "";
-  if (typeof title === "object" && title["#text"]) {
-    return title["#text"].trim();
-  } else if (typeof title === "string") {
-    return title.trim();
-  }
-  return "";
-}
-
-function getHtmlUrl(doc: XMLFeedType): string {
-  const htmlUrl = doc?.rss?.channel?.link || doc?.rdf?.channel?.link || doc?.feed?.link || "";
-  if (Array.isArray(htmlUrl)) {
-    return htmlUrl[0]?.["__attributes"]?.["@_href"] ?? "";
-  }
-  return htmlUrl;
+  // Explicitly cast the result to FeederFeedData
+  return rawFeedData as FeederFeedData;
 }
 
 export async function getFeedItems(feedUrl: string) {
-  const xml = await fetchFeedContent(feedUrl);
+  const doc = await fetchFeedContent(feedUrl);
 
-  const doc = parseFeedXml(xml);
-  const itemsNodes = extractFeedItems(doc) || [];
-  return itemsNodes.map(item => buildFeedItem(feedUrl, item));
+  return doc.entries || [];
 }
 
 export async function getFeedDetails(feedUrl: string) {
-  const xml = await fetchFeedContent(feedUrl);
-
-  const doc = parseFeedXml(xml);
-  const itemsNodes = (extractFeedItems(doc) || []).map(item => buildFeedItem(feedUrl, item));
+  const doc = await fetchFeedContent(feedUrl);
 
   const feed = feedSchema.parse({
-    title: getFeedTitle(doc),
-    xmlUrl: feedUrl,
-    htmlUrl: getHtmlUrl(doc),
+    title: doc.title,
+    xmlUrl: doc.link,
+    htmlUrl: doc.link,
   });
-  return { feed, feedItems: itemsNodes };
+  return { feed, feedItems: doc.entries };
 }
 
 /**
